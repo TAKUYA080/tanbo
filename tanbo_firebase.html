@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="田んぼ水回り">
+<title>田んぼ水回り管理</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif}
+#map{position:fixed;inset:0;width:100%;height:100%}
+#topbar{position:fixed;top:0;left:0;right:0;z-index:1000;padding:env(safe-area-inset-top,8px) 8px 6px;background:linear-gradient(to bottom,rgba(0,0,0,0.75),transparent);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+#topbar h1{font-size:13px;font-weight:700;color:#fff;white-space:nowrap}
+.tb-btn{font-size:11px;padding:5px 8px;border:1px solid rgba(255,255,255,0.3);border-radius:8px;background:rgba(0,0,0,0.55);color:#fff;cursor:pointer;white-space:nowrap;-webkit-appearance:none}
+.tb-btn.active{background:rgba(29,111,164,0.85);border-color:#4ab3f4}
+.tb-btn.green{background:rgba(26,74,46,0.85);border-color:#3a9a5c;color:#7ddb9e}
+.tb-btn.green.active{background:rgba(45,122,74,0.9)}
+.tb-btn.red{background:rgba(74,26,26,0.85);border-color:#9a3a3a;color:#db7d7d}
+#count-bar{position:fixed;top:env(safe-area-inset-top,0px);margin-top:40px;left:0;right:0;z-index:999;display:flex;gap:8px;font-size:10px;padding:3px 10px;background:rgba(0,0,0,0.55);color:#ccc;flex-wrap:wrap}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:2px;vertical-align:middle}
+/* 接続状態 */
+#sync-status{position:fixed;top:env(safe-area-inset-top,0px);margin-top:40px;right:8px;z-index:1001;font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(0,0,0,0.6);color:#aaa}
+#sync-status.connected{color:#6ee7b7}
+#sync-status.disconnected{color:#f87171}
+#map-type-ctrl{position:fixed;top:env(safe-area-inset-top,0px);margin-top:66px;left:50%;transform:translateX(-50%);z-index:999;display:flex;gap:2px;background:rgba(0,0,0,0.62);border-radius:8px;padding:3px;border:1px solid rgba(255,255,255,0.2)}
+.mt-btn{font-size:11px;padding:4px 10px;border-radius:5px;border:none;cursor:pointer;background:transparent;color:#aaa;-webkit-appearance:none}
+.mt-btn.active{background:#1d6fa4;color:#fff}
+#pin-card{position:fixed;z-index:1200;display:none;transform:translateX(-50%)}
+#pin-card-inner{position:relative;background:rgba(15,15,30,0.97);border:1px solid rgba(255,255,255,0.18);border-radius:14px;padding:10px 12px;min-width:186px;box-shadow:0 4px 20px rgba(0,0,0,0.6)}
+#pin-card-inner::before{content:'';position:absolute;top:-8px;left:50%;transform:translateX(-50%);border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:8px solid rgba(15,15,30,0.97)}
+.pc-name{font-size:13px;font-weight:700;color:#fff;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.pc-close{font-size:16px;color:#666;cursor:pointer;padding:0 2px}
+.pc-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
+.pc-row+.pc-row{border-top:1px solid rgba(255,255,255,0.07)}
+.pc-label{display:flex;align-items:center;gap:5px}
+.pc-label-txt{font-size:13px;color:#ddd;font-weight:500}
+.pc-state{font-size:11px;font-weight:600}
+.pc-state.open{color:#4ab3f4}
+.pc-state.closed{color:#555}
+.sw{position:relative;width:60px;height:30px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw-track{position:absolute;inset:0;border-radius:30px;cursor:pointer;transition:0.28s;background:#2a2a3a;border:1px solid #444}
+.sw-track:before{content:'';position:absolute;width:22px;height:22px;border-radius:50%;background:#fff;top:3px;left:3px;transition:0.28s;box-shadow:0 1px 4px rgba(0,0,0,0.4)}
+.sw.y input:checked~.sw-track{background:#1d6fa4;border-color:#4ab3f4}
+.sw.h input:checked~.sw-track{background:#b45309;border-color:#f59e0b}
+.sw input:checked~.sw-track:before{transform:translateX(30px)}
+.sw-on{position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:10px;color:#fff;font-weight:700;opacity:0;transition:0.2s;pointer-events:none}
+.sw-off{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;color:#777;font-weight:700;opacity:1;transition:0.2s;pointer-events:none}
+.sw input:checked~.sw-track .sw-on{opacity:1}
+.sw input:checked~.sw-track .sw-off{opacity:0}
+.pc-detail-btn{width:100%;margin-top:8px;padding:7px;font-size:12px;border:1px solid rgba(255,255,255,0.15);border-radius:9px;background:rgba(255,255,255,0.06);color:#aaa;cursor:pointer;-webkit-appearance:none;text-align:center}
+#detail-panel{position:fixed;bottom:0;left:0;right:0;z-index:1300;background:#0f0f1e;border-radius:20px 20px 0 0;border-top:1px solid #333;padding:14px 16px;padding-bottom:calc(env(safe-area-inset-bottom,0px)+16px);display:none;max-height:72vh;overflow-y:auto}
+#dp-drag{width:40px;height:4px;background:#444;border-radius:2px;margin:0 auto 12px}
+#dp-title{font-size:16px;font-weight:700;color:#fff;margin-bottom:12px}
+.finput{width:100%;font-size:15px;padding:10px 12px;border:1px solid #555;border-radius:10px;background:#1e1e35;color:#fff;margin-bottom:10px;-webkit-appearance:none}
+.finput::placeholder{color:#555}
+.psect{font-size:11px;color:#666;border-top:1px solid #2a2a3a;padding-top:8px;margin:6px 0}
+.memo-input{width:100%;font-size:13px;padding:10px;border:1px solid #555;border-radius:10px;background:#1e1e35;color:#ddd;resize:none;margin-bottom:10px;-webkit-appearance:none}
+.memo-input::placeholder{color:#555}
+#addr-disp{font-size:11px;color:#7dd3fc;margin-bottom:10px;background:#0d1f35;border-radius:8px;padding:7px 10px}
+#rord-disp{font-size:12px;color:#7dd3fc;margin-bottom:8px;background:#0d1f35;border-radius:8px;padding:7px 10px}
+.btn-row{display:flex;gap:8px;margin-bottom:10px}
+.panel-btn{font-size:13px;padding:11px;border:1px solid #3a6a4a;border-radius:10px;background:#0d2018;color:#6ee7b7;cursor:pointer;flex:1;-webkit-appearance:none;font-weight:500}
+.panel-btn2{font-size:13px;padding:11px;border:1px solid #555;border-radius:10px;background:#1a1a2e;color:#aaa;cursor:pointer;flex:1;-webkit-appearance:none}
+.dp-close-btn{font-size:13px;padding:11px;border:1px solid #444;border-radius:10px;background:#1a1a2e;color:#aaa;cursor:pointer;width:100%;margin-bottom:8px;-webkit-appearance:none}
+.del-btn{font-size:14px;padding:12px;border:1px solid #7a2a2a;border-radius:10px;background:#1a0d0d;color:#f87171;cursor:pointer;width:100%;-webkit-appearance:none;font-weight:500}
+#route-panel{position:fixed;top:108px;left:8px;width:168px;background:rgba(15,15,30,0.95);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:10px;display:none;z-index:1000;max-height:50%;overflow-y:auto}
+#route-panel h3{font-size:12px;font-weight:600;margin-bottom:6px;color:#fff}
+.ri{font-size:11px;display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid #2a2a3a;color:#ccc}
+.rnum{width:20px;height:20px;border-radius:50%;background:#0d3a6e;border:1px solid #4ab3f4;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+#hint{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+10px);left:50%;transform:translateX(-50%);font-size:11px;color:#ccc;background:rgba(0,0,0,0.65);padding:5px 12px;border-radius:20px;pointer-events:none;z-index:999;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="topbar">
+  <h1>🌾 田んぼ水回り</h1>
+  <button class="tb-btn active" id="btn-add" onclick="setMode('add')">＋追加</button>
+  <button class="tb-btn" id="btn-sel" onclick="setMode('select')">選択</button>
+  <button class="tb-btn green" id="btn-route" onclick="toggleRoute()">巡回</button>
+  <button class="tb-btn" onclick="resetView()">全体</button>
+  <button class="tb-btn" onclick="exportCSV()">CSV</button>
+  <button class="tb-btn red" onclick="clearAll()">全削除</button>
+</div>
+<div id="count-bar">
+  <span><span class="dot" style="background:#4ab3f4"></span>用水開:<b id="cy-o">0</b></span>
+  <span><span class="dot" style="background:#555"></span>用水閉:<b id="cy-c">0</b></span>
+  <span><span class="dot" style="background:#f59e0b"></span>排水開:<b id="ch-o">0</b></span>
+  <span><span class="dot" style="background:#5a4a20"></span>排水閉:<b id="ch-c">0</b></span>
+  <span>計:<b id="tot">0</b>枚</span>
+</div>
+<div id="sync-status" class="disconnected">⟳ 接続中...</div>
+<div id="map-type-ctrl">
+  <button class="mt-btn active" id="mt-sat" onclick="setTile('sat')">航空写真</button>
+  <button class="mt-btn" id="mt-std" onclick="setTile('std')">地図</button>
+</div>
+<div id="pin-card">
+  <div id="pin-card-inner">
+    <div class="pc-name">
+      <span id="pc-title">田んぼ</span>
+      <span class="pc-close" onclick="closeCard()">✕</span>
+    </div>
+    <div class="pc-row">
+      <div class="pc-label">
+        <span>💧</span><span class="pc-label-txt">用水</span>
+        <span class="pc-state closed" id="y-state">閉</span>
+      </div>
+      <label class="sw y">
+        <input type="checkbox" id="y-sw" onchange="onSw('yousui',this.checked)">
+        <div class="sw-track"><span class="sw-on">開</span><span class="sw-off">閉</span></div>
+      </label>
+    </div>
+    <div class="pc-row">
+      <div class="pc-label">
+        <span>🌊</span><span class="pc-label-txt">排水</span>
+        <span class="pc-state closed" id="h-state">閉</span>
+      </div>
+      <label class="sw h">
+        <input type="checkbox" id="h-sw" onchange="onSw('haisui',this.checked)">
+        <div class="sw-track"><span class="sw-on">開</span><span class="sw-off">閉</span></div>
+      </label>
+    </div>
+    <button class="pc-detail-btn" onclick="openDetail()">📝 名前・メモ・巡回を編集</button>
+  </div>
+</div>
+<div id="detail-panel">
+  <div id="dp-drag"></div>
+  <div id="dp-title">詳細設定</div>
+  <input class="finput" id="fname" placeholder="名称（例: 外城町1番田）" oninput="upd('name',this.value)"/>
+  <div class="psect">📍 位置情報</div>
+  <div id="addr-disp">（住所取得中）</div>
+  <div class="psect">📝 メモ</div>
+  <textarea class="memo-input" id="fmemo" rows="3" placeholder="作業メモ・気づきなど" oninput="upd('memo',this.value)"></textarea>
+  <div class="psect">🗺 巡回ルート</div>
+  <div id="rord-disp">未登録</div>
+  <div class="btn-row">
+    <button class="panel-btn" onclick="addRoute()">＋ 巡回に追加</button>
+    <button class="panel-btn2" onclick="rmRoute()">外す</button>
+  </div>
+  <button class="dp-close-btn" onclick="closeDetail()">閉じる</button>
+  <button class="del-btn" onclick="delSelected()">🗑 この田んぼを削除</button>
+</div>
+<div id="route-panel">
+  <h3>📋 巡回順</h3>
+  <div id="rlist"><div style="font-size:11px;color:#555">まだ未追加</div></div>
+  <div style="font-size:10px;color:#555;margin-top:6px">ピン→詳細→追加で登録</div>
+</div>
+<div id="hint">地図をタップして田んぼを追加</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, remove, connectDatabaseEmulator } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBReZG_dWh3rQdh3-_crd752lgPSUyqzUg",
+  authDomain: "tanbo-mizumawari.firebaseapp.com",
+  databaseURL: "https://tanbo-mizumawari-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tanbo-mizumawari",
+  storageBucket: "tanbo-mizumawari.firebasestorage.app",
+  messagingSenderId: "30323453463",
+  appId: "1:30323453463:web:41fe0562d926e77d463652"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const fieldsRef = ref(db, 'fields');
+
+var CENTER_LAT=37.8352,CENTER_LNG=139.2301,CENTER_ZOOM=15;
+var map,tileLayer,fields=[],selId=null,mode='add',markers={};
+var routeOn=false,routeOrder=[],routeLine=null;
+var isRemoteUpdate=false;
+
+var TILES={
+  sat:{url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',attr:'Tiles © Esri'},
+  std:{url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',attr:'© OpenStreetMap'}
+};
+
+// 地図初期化
+map=L.map('map',{zoomControl:true}).setView([CENTER_LAT,CENTER_LNG],CENTER_ZOOM);
+tileLayer=L.tileLayer(TILES.sat.url,{attribution:TILES.sat.attr,maxZoom:20}).addTo(map);
+map.on('click',function(e){
+  if(mode==='add') addField(e.latlng.lat,e.latlng.lng);
+  else closeCard();
+});
+map.on('move',function(){
+  if(selId){
+    var f=fields.find(function(x){return x.id===selId;});
+    if(f) positionCard(f);
+  }
+});
+
+// Firebase リアルタイム同期
+onValue(fieldsRef, function(snapshot){
+  var data=snapshot.val();
+  isRemoteUpdate=true;
+
+  // 全マーカー削除
+  Object.keys(markers).forEach(function(id){map.removeLayer(markers[id]);});
+  markers={};
+  fields=[];
+
+  if(data){
+    Object.keys(data).forEach(function(id){
+      var f=data[id];
+      fields.push(f);
+      var m=L.marker([f.lat,f.lng],{icon:mkIcon(f,null)}).addTo(map);
+      (function(fid){m.on('click',function(e){L.DomEvent.stopPropagation(e);selField(fid);});})(id);
+      markers[id]=m;
+    });
+  }
+
+  refAll();
+  cntUp();
+
+  // 選択中のピンカードを更新
+  if(selId){
+    var f=fields.find(function(x){return x.id===selId;});
+    if(f){
+      document.getElementById('pc-title').textContent=f.name||'田んぼ';
+      document.getElementById('y-sw').checked=f.yousui==='open';
+      document.getElementById('h-sw').checked=f.haisui==='open';
+      updState('yousui',f.yousui==='open');
+      updState('haisui',f.haisui==='open');
+    }
+  }
+
+  isRemoteUpdate=false;
+  document.getElementById('sync-status').textContent='● リアルタイム同期中';
+  document.getElementById('sync-status').className='connected';
+}, function(error){
+  document.getElementById('sync-status').textContent='✕ 接続エラー';
+  document.getElementById('sync-status').className='disconnected';
+});
+
+function saveField(f){
+  set(ref(db,'fields/'+f.id), f);
+}
+
+function deleteField(id){
+  remove(ref(db,'fields/'+id));
+}
+
+window.setTile=function(t){
+  if(tileLayer) map.removeLayer(tileLayer);
+  tileLayer=L.tileLayer(TILES[t].url,{attribution:TILES[t].attr,maxZoom:20}).addTo(map);
+  document.getElementById('mt-sat').className='mt-btn'+(t==='sat'?' active':'');
+  document.getElementById('mt-std').className='mt-btn'+(t==='std'?' active':'');
+};
+
+function mkColor(f){
+  var y=f.yousui==='open',h=f.haisui==='open';
+  if(y&&h) return '#a78bfa';
+  if(y) return '#4ab3f4';
+  if(h) return '#f59e0b';
+  return '#888';
+}
+
+function mkIcon(f,n){
+  var c=mkColor(f);
+  var lbl=n!=null?'<text x="19" y="22" text-anchor="middle" font-size="11" font-family="sans-serif" fill="white" font-weight="bold">'+n+'</text>':'';
+  return L.divIcon({
+    html:'<svg xmlns="http://www.w3.org/2000/svg" width="38" height="44" viewBox="0 0 38 44"><circle cx="19" cy="17" r="14" fill="'+c+'" stroke="white" stroke-width="3"/><polygon points="19,42 11,28 27,28" fill="'+c+'"/>'+lbl+'</svg>',
+    iconSize:[38,44],iconAnchor:[19,42],className:''
+  });
+}
+
+function positionCard(f){
+  var pt=map.latLngToContainerPoint(L.latLng(f.lat,f.lng));
+  var card=document.getElementById('pin-card');
+  var cardW=card.offsetWidth||190;
+  var cardH=card.offsetHeight||150;
+  var top=pt.y+46;
+  var left=pt.x;
+  if(left<cardW/2+10) left=cardW/2+10;
+  if(left>window.innerWidth-cardW/2-10) left=window.innerWidth-cardW/2-10;
+  if(top+cardH+10>window.innerHeight) top=pt.y-cardH-54;
+  if(top<80) top=80;
+  card.style.left=left+'px';
+  card.style.top=top+'px';
+}
+
+window.addField=function(lat,lng){
+  var id='f'+Date.now();
+  var f={id:id,lat:lat,lng:lng,name:'田んぼ'+(fields.length+1),yousui:'close',haisui:'close',memo:'',address:'',upd:now()};
+  saveField(f);
+  fetchAddr(f);
+};
+
+function fetchAddr(f){
+  fetch('https://nominatim.openstreetmap.org/reverse?lat='+f.lat+'&lon='+f.lng+'&format=json&accept-language=ja')
+  .then(function(r){return r.json();}).then(function(d){
+    var a=d.address||{},parts=[];
+    if(a.state) parts.push(a.state);
+    if(a.city||a.town||a.village) parts.push(a.city||a.town||a.village);
+    if(a.suburb||a.neighbourhood||a.quarter||a.hamlet) parts.push(a.suburb||a.neighbourhood||a.quarter||a.hamlet);
+    if(a.road) parts.push(a.road);
+    f.address=parts.join(' ');
+    saveField(f);
+    if(selId===f.id) document.getElementById('addr-disp').textContent=f.address||'（住所不明）';
+  }).catch(function(){});
+}
+
+function selField(id){
+  selId=id;
+  var f=fields.find(function(x){return x.id===id;});
+  if(!f) return;
+  document.getElementById('pc-title').textContent=f.name||'田んぼ';
+  document.getElementById('y-sw').checked=f.yousui==='open';
+  document.getElementById('h-sw').checked=f.haisui==='open';
+  updState('yousui',f.yousui==='open');
+  updState('haisui',f.haisui==='open');
+  document.getElementById('pin-card').style.display='block';
+  document.getElementById('hint').style.display='none';
+  positionCard(f);
+}
+
+function updState(gate,isOpen){
+  var el=document.getElementById(gate==='yousui'?'y-state':'h-state');
+  el.textContent=isOpen?'開':'閉';
+  el.className='pc-state '+(isOpen?'open':'closed');
+}
+
+window.onSw=function(gate,isOpen){
+  if(!selId) return;
+  var f=fields.find(function(x){return x.id===selId;});
+  if(!f) return;
+  f[gate]=isOpen?'open':'close';
+  f.upd=now();
+  updState(gate,isOpen);
+  saveField(f);
+};
+
+window.closeCard=function(){
+  document.getElementById('pin-card').style.display='none';
+  document.getElementById('detail-panel').style.display='none';
+  document.getElementById('hint').style.display='block';
+  selId=null;
+};
+
+window.openDetail=function(){
+  var f=fields.find(function(x){return x.id===selId;});
+  if(!f) return;
+  document.getElementById('dp-title').textContent=f.name||'詳細設定';
+  document.getElementById('fname').value=f.name;
+  document.getElementById('fmemo').value=f.memo||'';
+  document.getElementById('addr-disp').textContent=f.address||'（住所取得中）';
+  var ri=routeOrder.indexOf(selId);
+  document.getElementById('rord-disp').textContent=ri>=0?'巡回 '+(ri+1)+'番目':'未登録';
+  document.getElementById('detail-panel').style.display='block';
+};
+
+window.closeDetail=function(){document.getElementById('detail-panel').style.display='none';};
+
+window.upd=function(k,v){
+  if(!selId) return;
+  var f=fields.find(function(x){return x.id===selId;});
+  if(!f) return;
+  f[k]=v;
+  if(k==='name'){
+    document.getElementById('pc-title').textContent=v||'田んぼ';
+    document.getElementById('dp-title').textContent=v||'詳細設定';
+  }
+  f.upd=now();
+  saveField(f);
+};
+
+function refMk(f){
+  var ri=routeOrder.indexOf(f.id);
+  if(markers[f.id]) markers[f.id].setIcon(mkIcon(f,ri>=0?ri+1:null));
+}
+function refAll(){fields.forEach(refMk);}
+
+window.delSelected=function(){
+  if(!selId||!confirm('この田んぼを削除しますか？')) return;
+  deleteField(selId);
+  routeOrder=routeOrder.filter(function(x){return x!==selId;});
+  selId=null;
+  closeCard();
+  drawRoute();updRPanel();
+};
+
+window.setMode=function(m){
+  mode=m;
+  document.getElementById('btn-add').className='tb-btn'+(m==='add'?' active':'');
+  document.getElementById('btn-sel').className='tb-btn'+(m==='select'?' active':'');
+  document.getElementById('hint').textContent=m==='add'?'地図をタップして田んぼを追加':'ピンをタップして選択';
+};
+
+window.toggleRoute=function(){
+  routeOn=!routeOn;
+  document.getElementById('route-panel').style.display=routeOn?'block':'none';
+  document.getElementById('btn-route').className='tb-btn green'+(routeOn?' active':'');
+  if(!routeOn){routeOrder=[];drawRoute();refAll();updRPanel();}
+};
+
+window.addRoute=function(){
+  if(!selId||routeOrder.indexOf(selId)>=0) return;
+  routeOrder.push(selId);
+  refAll();drawRoute();updRPanel();
+  document.getElementById('rord-disp').textContent='巡回 '+(routeOrder.indexOf(selId)+1)+'番目';
+};
+
+window.rmRoute=function(){
+  if(!selId) return;
+  routeOrder=routeOrder.filter(function(x){return x!==selId;});
+  refAll();drawRoute();updRPanel();
+  document.getElementById('rord-disp').textContent='未登録';
+};
+
+function drawRoute(){
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  if(routeOrder.length<2) return;
+  var pts=routeOrder.map(function(id){
+    var f=fields.find(function(x){return x.id===id;});
+    return f?[f.lat,f.lng]:null;
+  }).filter(Boolean);
+  if(pts.length>=2) routeLine=L.polyline(pts,{color:'#6ee7b7',weight:3,dashArray:'8,5',opacity:0.9}).addTo(map);
+}
+
+function updRPanel(){
+  var h='';
+  routeOrder.forEach(function(id,i){
+    var f=fields.find(function(x){return x.id===id;});
+    if(!f) return;
+    h+='<div class="ri"><div class="rnum">'+(i+1)+'</div><div><div>'+f.name+'</div><div style="font-size:10px;color:#666">'+(f.yousui==='open'?'用水開':'用水閉')+' / '+(f.haisui==='open'?'排水開':'排水閉')+'</div></div></div>';
+  });
+  document.getElementById('rlist').innerHTML=h||'<div style="font-size:11px;color:#555">まだ未追加</div>';
+}
+
+window.resetView=function(){
+  if(!fields.length){map.setView([CENTER_LAT,CENTER_LNG],CENTER_ZOOM);return;}
+  var lats=fields.map(function(f){return f.lat;}),lngs=fields.map(function(f){return f.lng;});
+  map.fitBounds([[Math.min.apply(null,lats)-0.002,Math.min.apply(null,lngs)-0.002],[Math.max.apply(null,lats)+0.002,Math.max.apply(null,lngs)+0.002]]);
+};
+
+function cntUp(){
+  document.getElementById('cy-o').textContent=fields.filter(function(f){return f.yousui==='open';}).length;
+  document.getElementById('cy-c').textContent=fields.filter(function(f){return f.yousui==='close';}).length;
+  document.getElementById('ch-o').textContent=fields.filter(function(f){return f.haisui==='open';}).length;
+  document.getElementById('ch-c').textContent=fields.filter(function(f){return f.haisui==='close';}).length;
+  document.getElementById('tot').textContent=fields.length;
+}
+
+window.exportCSV=function(){
+  if(!fields.length){alert('田んぼが登録されていません');return;}
+  var h='名称,都道府県市町村町名,用水,排水,メモ,緯度,経度,更新日時\n';
+  var rows=fields.map(function(f){
+    return['"'+(f.name||'').replace(/"/g,'""')+'"','"'+(f.address||'').replace(/"/g,'""')+'"',f.yousui==='open'?'開':'閉',f.haisui==='open'?'開':'閉','"'+(f.memo||'').replace(/"/g,'""')+'"',f.lat.toFixed(6),f.lng.toFixed(6),'"'+(f.upd||'')+'"'].join(',');
+  });
+  var blob=new Blob(['\uFEFF'+h+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='田んぼ水回り_'+new Date().toLocaleDateString('ja-JP').replace(/\//g,'')+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+};
+
+window.clearAll=function(){
+  if(!fields.length) return;
+  if(!confirm('全ての田んぼを削除しますか？')) return;
+  fields.forEach(function(f){deleteField(f.id);});
+  routeOrder=[];selId=null;
+  closeCard();
+  if(routeLine){map.removeLayer(routeLine);routeLine=null;}
+  updRPanel();
+};
+
+function now(){return new Date().toLocaleString('ja-JP');}
+</script>
+</body>
+</html>
