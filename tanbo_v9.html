@@ -223,7 +223,7 @@ window.goToMyLocation=function(){
     var lat=pos.coords.latitude,lng=pos.coords.longitude;
     if(myLocMarker) map.removeLayer(myLocMarker);
     myLocMarker=L.marker([lat,lng],{icon:L.divIcon({html:'<div style="width:20px;height:20px;border-radius:50%;background:#4ab3f4;border:3px solid white;box-shadow:0 0 0 4px rgba(74,179,244,0.35)"></div>',iconSize:[20,20],iconAnchor:[10,10],className:''}),zIndexOffset:500}).addTo(map);
-    myLocMarker.bindPopup('📍 現在地').openPopup();
+    myLocMarker.bindPopup('📍 現在地').openPopup(); setTimeout(function(){if(myLocMarker) myLocMarker.closePopup();},2000);
     map.setView([lat,lng],16);
     fetchCenterAddr({lat:lat,lng:lng});
   },function(){alert('現在地を取得できませんでした。\nGPSをオンにしてください。');},{enableHighAccuracy:true,timeout:10000});
